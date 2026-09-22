@@ -82,8 +82,9 @@ func (at *AutoTrader) runCycle() error {
 	// NOTE: Must be called BEFORE candidate coins check to ensure equity is always recorded
 	at.saveEquitySnapshot(ctx)
 
-	// If no candidate coins available, log but do not error
-	if len(ctx.CandidateCoins) == 0 {
+	// Legacy modes skip when the candidate list is empty. ai_free must still
+	// manage an existing position even if the user later unchecks its symbol.
+	if len(ctx.CandidateCoins) == 0 && (!at.isAIFreeMode() || len(ctx.Positions) == 0) {
 		at.logInfof("ℹ️ No candidate coins available, skipping this cycle")
 		record.Success = true // Not an error, just no candidate coins
 		record.ExecutionLog = append(record.ExecutionLog, "No candidate coins available, cycle skipped")
@@ -251,10 +252,17 @@ func (at *AutoTrader) runCycle() error {
 	logger.Info(strings.Repeat("-", 70))
 
 	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
-	sortedDecisions := sortDecisionsByPriority(aiDecision.Decisions)
-	sortedDecisions = at.filterDecisionsToStrategyUniverse(sortedDecisions, ctx)
-	sortedDecisions = at.enforceVergexSignalPolicy(sortedDecisions, ctx)
-	sortedDecisions = sortDecisionsByPriority(sortedDecisions)
+	var sortedDecisions []kernel.Decision
+	if at.isAIFreeMode() {
+		sortedDecisions = sortAIFreeDecisions(aiDecision.Decisions)
+		sortedDecisions = at.filterDecisionsToStrategyUniverse(sortedDecisions, ctx)
+		sortedDecisions = sortAIFreeDecisions(sortedDecisions)
+	} else {
+		sortedDecisions = sortDecisionsByPriority(aiDecision.Decisions)
+		sortedDecisions = at.filterDecisionsToStrategyUniverse(sortedDecisions, ctx)
+		sortedDecisions = at.enforceVergexSignalPolicy(sortedDecisions, ctx)
+		sortedDecisions = sortDecisionsByPriority(sortedDecisions)
+	}
 
 	logger.Info("🔄 Execution order (optimized): Close positions first → Open positions later")
 	for i, d := range sortedDecisions {
@@ -313,12 +321,23 @@ func (at *AutoTrader) runCycle() error {
 			Success:    false,
 		}
 
-		if reason := at.tradeThrottleReason(d, ctx); reason != "" {
-			at.logWarnf("🧊 %s %s blocked: %s", d.Symbol, d.Action, reason)
-			actionRecord.Error = reason
-			record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("🧊 %s %s blocked: %s", d.Symbol, d.Action, reason))
-			record.Decisions = append(record.Decisions, actionRecord)
-			continue
+		if !at.isAIFreeMode() {
+			if reason := at.tradeThrottleReason(d, ctx); reason != "" {
+				at.logWarnf("🧊 %s %s blocked: %s", d.Symbol, d.Action, reason)
+				actionRecord.Error = reason
+				record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("🧊 %s %s blocked: %s", d.Symbol, d.Action, reason))
+				record.Decisions = append(record.Decisions, actionRecord)
+				continue
+			}
+		}
+		if at.isAIFreeMode() && isOpenDecision(d.Action) {
+			if err := at.aiFreeSessionAllowsOpen(); err != nil {
+				actionRecord.Error = err.Error()
+				actionRecord.RuntimeBlockReason = err.Error()
+				record.ExecutionLog = append(record.ExecutionLog, fmt.Sprintf("🔒 %s %s blocked: %v", d.Symbol, d.Action, err))
+				record.Decisions = append(record.Decisions, actionRecord)
+				continue
+			}
 		}
 		if err := at.executeDecisionWithRecord(&d, &actionRecord); err != nil {
 			at.logErrorf("❌ Failed to execute decision (%s %s): %v", d.Symbol, d.Action, err)
@@ -598,11 +617,15 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 		}
 	}
 
-	// 4. Calculate total P&L
+	// 4. Calculate total P&L. Legacy modes retain account-equity baseline
+	// semantics; ai_free exposes session trading PnL so deposits/withdrawals do not pollute context.
 	totalPnL := totalEquity - at.initialBalance
 	totalPnLPct := 0.0
 	if at.initialBalance > 0 {
 		totalPnLPct = (totalPnL / at.initialBalance) * 100
+	}
+	if at.isAIFreeMode() {
+		totalPnL, totalPnLPct = at.aiFreeContextPnL(totalPnL, totalPnLPct)
 	}
 
 	marginUsedPct := 0.0
@@ -633,8 +656,10 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 			MarginUsedPct:    marginUsedPct,
 			PositionCount:    len(positionInfos),
 		},
-		Positions:      positionInfos,
-		CandidateCoins: candidateCoins,
+		Positions:         positionInfos,
+		CandidateCoins:    candidateCoins,
+		MarketExchange:    at.exchange,
+		MarketPriceGetter: at.trader.GetMarketPrice,
 	}
 
 	// 7. Add recent closed trades (if store is available)
