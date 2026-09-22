@@ -15,17 +15,17 @@ import (
 )
 
 type runtimeConfig struct {
-	TraderID             string
-	UserID               string
-	Exchange             string
-	DatabasePath         string
-	Language             string
-	CustomerPrompt       string
-	DeepSeekAPIKey       string
-	ManagedCapitalUSDT   float64
-	MaxLossPerTradeUSDT  float64
-	MaxLeverage          int
-	MaxPositions         int
+	TraderID              string
+	UserID                string
+	Exchange              string
+	DatabasePath          string
+	Language              string
+	CustomerPrompt        string
+	DeepSeekAPIKey        string
+	ManagedCapitalUSDT    float64
+	MaxLossPerTradeUSDT   float64
+	MaxLeverage           int
+	MaxPositions          int
 	AccountTakeProfitUSDT float64
 	AccountStopLossUSDT   float64
 
