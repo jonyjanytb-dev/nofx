@@ -20,6 +20,7 @@ import (
 	"nofx/trader/lighter"
 	"nofx/trader/okx"
 	"nofx/wallet"
+	"strings"
 	"sync"
 	"time"
 )
@@ -223,6 +224,13 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		}
 	}
 
+	if config.StrategyConfig != nil && strings.EqualFold(strings.TrimSpace(config.StrategyConfig.DecisionMode), "ai_free") {
+		config.AIModel = "deepseek"
+		config.UseQwen = false
+		config.CustomModelName = "deepseek-flash"
+		config.ScanInterval = 15 * time.Minute
+	}
+
 	// Initialize AI client based on provider
 	var mcpClient mcp.AIClient
 	aiModel := config.AIModel
@@ -263,6 +271,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		mcpClient.SetAPIKey(apiKey, "", config.CustomModelName)
 	default:
 		mcpClient.SetAPIKey(apiKey, customURL, config.CustomModelName)
+	}
+	if config.StrategyConfig != nil && strings.EqualFold(strings.TrimSpace(config.StrategyConfig.DecisionMode), "ai_free") {
+		mcp.ConfigureAIFreeClient(mcpClient)
 	}
 	logger.Infof("🤖 [%s] Using %s AI", config.Name, aiModel)
 
@@ -472,8 +483,11 @@ func (at *AutoTrader) Run() error {
 	at.monitorWg.Add(1)
 	defer at.monitorWg.Done()
 
-	// Start drawdown monitoring
-	at.startDrawdownMonitor()
+	// Legacy drawdown monitoring contains autonomous exit logic; ai_free uses
+	// model exits, exchange protection orders and hard session-risk locks only.
+	if !at.isAIFreeMode() {
+		at.startDrawdownMonitor()
+	}
 
 	// Start Lighter order sync if using Lighter exchange
 	if at.exchange == "lighter" {
@@ -549,6 +563,13 @@ func (at *AutoTrader) Run() error {
 
 	// Check if this is a grid trading strategy
 	isGridStrategy := at.IsGridStrategy()
+	if at.isAIFreeMode() && !isGridStrategy {
+		if _, err := at.ensureAIFreeSession(); err != nil {
+			return fmt.Errorf("ai_free session start failed: %w", err)
+		}
+		at.startAIFreeSessionRiskMonitor()
+		return at.runAIFreeAlignedLoop()
+	}
 	if isGridStrategy {
 		at.logInfof("🔲 Grid trading strategy detected, initializing grid...")
 		if err := at.InitializeGrid(); err != nil {
