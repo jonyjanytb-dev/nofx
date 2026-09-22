@@ -88,7 +88,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	enrichVergexDataWithStrategy(ctx, engine)
 
 	// Ensure OITopDataMap is initialized
-	if ctx.OITopDataMap == nil {
+	if !engine.usesAIFreeMode() && ctx.OITopDataMap == nil {
 		ctx.OITopDataMap = make(map[string]*OITopData)
 		oiPositions, err := engine.nofxosClient.GetOITopPositions()
 		if err == nil {
@@ -119,15 +119,20 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	}
 
 	// 5. Parse AI response
-	decision, err := parseFullDecisionResponse(
-		aiResponse,
-		ctx.Account.TotalEquity,
-		riskConfig.BTCETHMaxLeverage,
-		riskConfig.AltcoinMaxLeverage,
-		riskConfig.BTCETHMaxPositionValueRatio,
-		riskConfig.AltcoinMaxPositionValueRatio,
-		engine.usesVergexSignalPrompt(),
-	)
+	var decision *FullDecision
+	if engine.usesAIFreeMode() {
+		decision, err = parseAIFreeDecisionResponse(aiResponse, ctx, riskConfig.MaxLeverage)
+	} else {
+		decision, err = parseFullDecisionResponse(
+			aiResponse,
+			ctx.Account.TotalEquity,
+			riskConfig.BTCETHMaxLeverage,
+			riskConfig.AltcoinMaxLeverage,
+			riskConfig.BTCETHMaxPositionValueRatio,
+			riskConfig.AltcoinMaxPositionValueRatio,
+			engine.usesVergexSignalPrompt(),
+		)
+	}
 
 	if decision != nil {
 		decision.Timestamp = time.Now()
@@ -203,7 +208,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 
 	// 1. First fetch data for position coins (must fetch)
 	for _, pos := range ctx.Positions {
-		data, err := market.GetWithTimeframes(pos.Symbol, timeframes, primaryTimeframe, klineCount)
+		data, err := fetchMarketDataForStrategySymbol(ctx, engine, pos.Symbol, timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for position %s: %v", pos.Symbol, err)
 			continue
@@ -224,7 +229,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		data, err := market.GetWithTimeframes(coin.Symbol, timeframes, primaryTimeframe, klineCount)
+		data, err := fetchMarketDataForStrategySymbol(ctx, engine, coin.Symbol, timeframes, primaryTimeframe, klineCount)
 		if err != nil {
 			logger.Infof("⚠️  Failed to fetch market data for %s: %v", coin.Symbol, err)
 			continue
@@ -233,7 +238,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 		// Liquidity filter (skip for xyz dex assets - they don't have OI data from Binance)
 		isExistingPosition := positionSymbols[coin.Symbol]
 		isXyzAsset := market.IsXyzDexAsset(coin.Symbol)
-		if !isExistingPosition && !isXyzAsset && data.OpenInterest != nil && data.CurrentPrice > 0 {
+		if !engine.usesAIFreeMode() && !isExistingPosition && !isXyzAsset && data.OpenInterest != nil && data.CurrentPrice > 0 {
 			oiValue := data.OpenInterest.Latest * data.CurrentPrice
 			oiValueInMillions := oiValue / 1_000_000
 			if oiValueInMillions < minOIThresholdMillions {
