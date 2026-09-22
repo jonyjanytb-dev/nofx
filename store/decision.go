@@ -88,8 +88,14 @@ type DecisionAction struct {
 	StopLoss   float64   `json:"stop_loss,omitempty"`   // Stop loss price
 	TakeProfit float64   `json:"take_profit,omitempty"` // Take profit price
 	Confidence int       `json:"confidence,omitempty"`  // AI confidence (0-100)
-	Reasoning  string    `json:"reasoning,omitempty"`   // Brief reasoning
-	OrderID    int64     `json:"order_id"`
+	Reasoning                string    `json:"reasoning,omitempty"` // Brief reasoning
+	RequestedPositionSizeUSD float64   `json:"requested_position_size_usd,omitempty"`
+	AdjustedPositionSizeUSD  float64   `json:"adjusted_position_size_usd,omitempty"`
+	EstimatedRiskUSD         float64   `json:"estimated_risk_usd,omitempty"`
+	MaxRiskUSD               float64   `json:"max_risk_usd,omitempty"`
+	RiskAdjusted             bool      `json:"risk_adjusted,omitempty"`
+	RuntimeBlockReason       string    `json:"runtime_block_reason,omitempty"`
+	OrderID                  int64     `json:"order_id"`
 	Timestamp  time.Time `json:"timestamp"`
 	Success    bool      `json:"success"`
 	Error      string    `json:"error"`
