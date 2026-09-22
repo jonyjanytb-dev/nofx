@@ -24,6 +24,9 @@ type Config struct {
 	Temperature float64
 	UseFullURL  bool
 
+	// DeepSeek-specific transport switch used only by ai_free.
+	DeepSeekThinkingDisabled bool
+
 	// Retry configuration
 	MaxRetries     int
 	RetryWaitBase  time.Duration
