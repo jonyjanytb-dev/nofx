@@ -24,7 +24,11 @@ jobs:
         run: |
           files="store/strategy.go store/decision.go store/ai_free_config.go store/trading_session.go kernel/engine.go kernel/engine_prompt.go kernel/engine_analysis.go kernel/engine_ai_free.go kernel/engine_ai_free_market.go market/types.go market/data.go market/data_exchange.go mcp/config.go mcp/client.go mcp/ai_free_config.go trader/auto_trader.go trader/auto_trader_loop.go trader/auto_trader_orders.go trader/auto_trader_ai_free_risk.go trader/auto_trader_ai_free_cycle.go trader/auto_trader_ai_free_protection.go trader/auto_trader_session_risk.go trader/lighter/trader.go trader/lighter/account.go kernel/engine_ai_free_test.go market/data_exchange_test.go mcp/ai_free_config_test.go store/trading_session_test.go trader/auto_trader_ai_free_test.go cmd/herman_ai_free_runner/main.go cmd/herman_ai_free_runner/main_test.go"
           bad=$(gofmt -l $files)
-          test -z "$bad" || (echo "$bad"; exit 1)
+          if [ -n "$bad" ]; then
+            echo "$bad"
+            gofmt -d $bad
+            exit 1
+          fi
       - name: Focused tests
         run: go test ./kernel ./market ./mcp ./store ./trader ./trader/lighter ./cmd/herman_ai_free_runner
       - name: Full backend tests
