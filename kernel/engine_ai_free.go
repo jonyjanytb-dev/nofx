@@ -45,7 +45,7 @@ INTERFACE RULES
 Allowed actions: open_long, open_short, close_long, close_short, hold, wait.
 
 Return concise user-visible analysis in <reasoning> and a strict JSON array in <decision>.`,
-		strings.TrimSpace(e.config.CustomPrompt),
+		e.config.CustomPrompt,
 		r.ManagedCapitalUSDT,
 		r.MaxLossPerTradeUSDT,
 		r.MaxLeverage,
