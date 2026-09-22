@@ -33,8 +33,10 @@ jobs:
         run: go test ./kernel ./market ./mcp ./store ./trader ./trader/lighter ./cmd/herman_ai_free_runner
       - name: Full backend tests
         run: go test ./...
+      - name: Build Herman AI Free runner
+        run: go build -o /tmp/herman-ai-free-runner ./cmd/herman_ai_free_runner
       - name: Vet changed packages
-        run: go vet ./kernel ./market ./mcp ./store ./trader
+        run: go vet ./kernel ./market ./mcp ./store ./trader ./trader/lighter ./cmd/herman_ai_free_runner
       - name: Verify requested base is an ancestor
         run: |
           git merge-base --is-ancestor 638d4042118995fbf1a38d3822b1139aa3c6b467 HEAD
