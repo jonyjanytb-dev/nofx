@@ -103,6 +103,8 @@ type Context struct {
 	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
 	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
 	MarketDataMap      map[string]*market.Data            `json:"-"`
+	MarketExchange     string                             `json:"-"`
+	MarketPriceGetter  func(string) (float64, error)     `json:"-"`
 	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
 	OITopDataMap       map[string]*OITopData              `json:"-"`
 	QuantDataMap       map[string]*QuantData              `json:"-"`
@@ -124,8 +126,10 @@ type Decision struct {
 	// Opening position parameters
 	Leverage        int     `json:"leverage,omitempty"`
 	PositionSizeUSD float64 `json:"position_size_usd,omitempty"`
-	StopLoss        float64 `json:"stop_loss,omitempty"`
-	TakeProfit      float64 `json:"take_profit,omitempty"`
+	StopLoss         float64  `json:"stop_loss,omitempty"`
+	TakeProfit       float64  `json:"take_profit,omitempty"`
+	UpdateStopLoss   *float64 `json:"update_stop_loss,omitempty"`
+	UpdateTakeProfit *float64 `json:"update_take_profit,omitempty"`
 
 	// Grid trading parameters
 	Price      float64 `json:"price,omitempty"`       // Limit order price (for grid)
