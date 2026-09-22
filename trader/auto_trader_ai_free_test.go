@@ -178,7 +178,6 @@ func TestAIFreeAccountTPLocksAndFlattens(t *testing.T) {
 	}
 }
 
-
 func TestAIFreeLockedSessionRestartFinishesFlattenAndStaysLocked(t *testing.T) {
 	st, err := store.New(filepath.Join(t.TempDir(), "ai-free-restart.db"))
 	if err != nil {
