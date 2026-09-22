@@ -820,15 +820,18 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 				ctx.TradingStats.AvgLoss,
 				ctx.TradingStats.MaxDrawdownPct))
 
-			// Performance hints based on profit factor, sharpe, and drawdown
-			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
-				sb.WriteString("Performance: GOOD - maintain current strategy\n")
-			} else if ctx.TradingStats.ProfitFactor < 1 {
-				sb.WriteString("Performance: NEEDS IMPROVEMENT - improve win/loss ratio, optimize TP/SL\n")
-			} else if ctx.TradingStats.MaxDrawdownPct > 30 {
-				sb.WriteString("Performance: HIGH RISK - reduce position size, control drawdown\n")
-			} else {
-				sb.WriteString("Performance: NORMAL - room for optimization\n")
+			// Legacy modes keep NOFX performance coaching. ai_free receives the
+			// statistics as facts only; the platform must not inject trading advice.
+			if !e.usesAIFreeMode() {
+				if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
+					sb.WriteString("Performance: GOOD - maintain current strategy\n")
+				} else if ctx.TradingStats.ProfitFactor < 1 {
+					sb.WriteString("Performance: NEEDS IMPROVEMENT - improve win/loss ratio, optimize TP/SL\n")
+				} else if ctx.TradingStats.MaxDrawdownPct > 30 {
+					sb.WriteString("Performance: HIGH RISK - reduce position size, control drawdown\n")
+				} else {
+					sb.WriteString("Performance: NORMAL - room for optimization\n")
+				}
 			}
 		} else {
 			sb.WriteString("## Historical Trading Statistics\n")
@@ -843,15 +846,18 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 				ctx.TradingStats.AvgLoss,
 				ctx.TradingStats.MaxDrawdownPct))
 
-			// Performance hints based on profit factor, sharpe, and drawdown
-			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
-				sb.WriteString("Performance: GOOD - maintain current strategy\n")
-			} else if ctx.TradingStats.ProfitFactor < 1 {
-				sb.WriteString("Performance: NEEDS IMPROVEMENT - improve win/loss ratio, optimize TP/SL\n")
-			} else if ctx.TradingStats.MaxDrawdownPct > 30 {
-				sb.WriteString("Performance: HIGH RISK - reduce position size, control drawdown\n")
-			} else {
-				sb.WriteString("Performance: NORMAL - room for optimization\n")
+			// Legacy modes keep NOFX performance coaching. ai_free receives the
+			// statistics as facts only; the platform must not inject trading advice.
+			if !e.usesAIFreeMode() {
+				if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
+					sb.WriteString("Performance: GOOD - maintain current strategy\n")
+				} else if ctx.TradingStats.ProfitFactor < 1 {
+					sb.WriteString("Performance: NEEDS IMPROVEMENT - improve win/loss ratio, optimize TP/SL\n")
+				} else if ctx.TradingStats.MaxDrawdownPct > 30 {
+					sb.WriteString("Performance: HIGH RISK - reduce position size, control drawdown\n")
+				} else {
+					sb.WriteString("Performance: NORMAL - room for optimization\n")
+				}
 			}
 		}
 		sb.WriteString("\n")
