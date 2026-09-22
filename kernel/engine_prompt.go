@@ -16,6 +16,10 @@ import (
 
 // BuildSystemPrompt builds System Prompt according to strategy configuration
 func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+	if e.usesAIFreeMode() {
+		return e.buildAIFreeSystemPrompt()
+	}
+
 	var sb strings.Builder
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
