@@ -104,7 +104,10 @@ func TestAIFreeManagedCapitalCapsAggregateMargin(t *testing.T) {
 	}
 }
 
-type fakeAIFreeTrader struct{ positions []map[string]interface{} }
+type fakeAIFreeTrader struct {
+	positions      []map[string]interface{}
+	cancelAllCalls int
+}
 
 func (f *fakeAIFreeTrader) GetBalance() (map[string]interface{}, error) {
 	return map[string]interface{}{"totalEquity": 100.0, "availableBalance": 100.0}, nil
@@ -131,7 +134,10 @@ func (f *fakeAIFreeTrader) SetStopLoss(string, string, float64, float64) error  
 func (f *fakeAIFreeTrader) SetTakeProfit(string, string, float64, float64) error { return nil }
 func (f *fakeAIFreeTrader) CancelStopLossOrders(string) error                    { return nil }
 func (f *fakeAIFreeTrader) CancelTakeProfitOrders(string) error                  { return nil }
-func (f *fakeAIFreeTrader) CancelAllOrders(string) error                         { return nil }
+func (f *fakeAIFreeTrader) CancelAllOrders(string) error {
+	f.cancelAllCalls++
+	return nil
+}
 func (f *fakeAIFreeTrader) CancelStopOrders(string) error                        { return nil }
 func (f *fakeAIFreeTrader) FormatQuantity(string, float64) (string, error)       { return "1", nil }
 func (f *fakeAIFreeTrader) GetOrderStatus(string, string) (map[string]interface{}, error) {
@@ -169,5 +175,55 @@ func TestAIFreeAccountTPLocksAndFlattens(t *testing.T) {
 	}
 	if err := at.aiFreeSessionAllowsOpen(); err == nil {
 		t.Fatal("locked session must block new opens")
+	}
+}
+
+
+func TestAIFreeLockedSessionRestartFinishesFlattenAndStaysLocked(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "ai-free-restart.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	cfg := store.GetAIFreeStrategyConfig("en")
+	cfg.RiskControl.ManagedCapitalUSDT = 100
+	fake := &fakeAIFreeTrader{
+		positions: []map[string]interface{}{{
+			"symbol": "BTCUSDT", "side": "long", "positionAmt": 0.1, "unRealizedProfit": 0.0,
+		}},
+	}
+	at := &AutoTrader{id: "restart-t1", config: AutoTraderConfig{StrategyConfig: &cfg}, trader: fake, store: st, exchange: "binance"}
+
+	ss := at.sessionStore()
+	if err := ss.InitTables(); err != nil {
+		t.Fatal(err)
+	}
+	session := &store.TradingSession{
+		TraderID: "restart-t1", Status: store.TradingSessionRunning,
+		ManagedCapitalUSDT: 100, MaxLossPerTradeUSDT: 5, MaxLeverage: 5, MaxPositions: 3,
+	}
+	if err := ss.Create(session); err != nil {
+		t.Fatal(err)
+	}
+	if err := ss.Lock(session.ID, store.TradingSessionSLLocked, "persisted before crash"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := at.ensureAIFreeSession(); err == nil {
+		t.Fatal("locked session must remain locked on restart")
+	}
+	if len(fake.positions) != 0 {
+		t.Fatalf("restart cleanup must flatten residual positions, got %+v", fake.positions)
+	}
+	if fake.cancelAllCalls < 2 {
+		t.Fatalf("expected pending and residual order cancellation, got %d calls", fake.cancelAllCalls)
+	}
+	latest, err := ss.GetLatest("restart-t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest == nil || latest.Status != store.TradingSessionSLLocked {
+		t.Fatalf("restart cleanup must preserve lock, got %+v", latest)
 	}
 }
