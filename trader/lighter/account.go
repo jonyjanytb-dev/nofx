@@ -14,7 +14,13 @@ import (
 // getFullAccountInfo Fetch full account info from Lighter API (includes balance and positions)
 // Supports both main accounts and sub-accounts
 func (t *LighterTraderV2) getFullAccountInfo() (*AccountInfo, error) {
-	endpoint := fmt.Sprintf("%s/api/v1/account?by=l1_address&value=%s", t.baseURL, t.walletAddr)
+	by := "l1_address"
+	value := t.walletAddr
+	if strings.TrimSpace(value) == "" {
+		by = "index"
+		value = strconv.FormatInt(t.accountIndex, 10)
+	}
+	endpoint := fmt.Sprintf("%s/api/v1/account?by=%s&value=%s", t.baseURL, by, value)
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
@@ -53,7 +59,7 @@ func (t *LighterTraderV2) getFullAccountInfo() (*AccountInfo, error) {
 	allAccounts = append(allAccounts, accountResp.SubAccounts...)
 
 	if len(allAccounts) == 0 {
-		return nil, fmt.Errorf("no account found for wallet address: %s (try depositing funds first at app.lighter.xyz)", t.walletAddr)
+		return nil, fmt.Errorf("no account found for %s=%s", by, value)
 	}
 
 	// Find the account that matches our stored accountIndex, or use the first one
