@@ -129,6 +129,8 @@ type AutoTraderConfig struct {
 	LighterPrivateKey       string // LIGHTER L1 private key (for account identification)
 	LighterAPIKeyPrivateKey string // LIGHTER API Key private key (40 bytes, for transaction signing)
 	LighterAPIKeyIndex      int    // LIGHTER API Key index (0-255)
+	LighterAccountIndex     int64  // LIGHTER account index, used by Herman where wallet address is not stored
+	LighterUseAccountIndex  bool   // Prefer account-index initialization instead of wallet-address discovery
 	LighterTestnet          bool   // Whether to use testnet
 
 	// AI configuration
@@ -331,17 +333,31 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	case "lighter":
 		logger.Infof("🏦 [%s] Using LIGHTER trading", config.Name)
 
-		if config.LighterWalletAddr == "" || config.LighterAPIKeyPrivateKey == "" {
-			return nil, fmt.Errorf("Lighter requires wallet address and API Key private key")
+		if config.LighterAPIKeyPrivateKey == "" {
+			return nil, fmt.Errorf("Lighter requires API Key private key")
 		}
 
-		// Lighter only supports mainnet (testnet disabled)
-		trader, err = lighter.NewLighterTraderV2(
-			config.LighterWalletAddr,
-			config.LighterAPIKeyPrivateKey,
-			config.LighterAPIKeyIndex,
-			false, // Always use mainnet for Lighter
-		)
+		// Lighter only supports mainnet (testnet disabled). Herman stores the
+		// account index rather than the L1 wallet address, so support both
+		// initialization forms without changing legacy NOFX behavior.
+		if config.LighterUseAccountIndex {
+			trader, err = lighter.NewLighterTraderV2WithAccountIndex(
+				config.LighterAccountIndex,
+				config.LighterAPIKeyPrivateKey,
+				config.LighterAPIKeyIndex,
+				false,
+			)
+		} else {
+			if config.LighterWalletAddr == "" {
+				return nil, fmt.Errorf("Lighter requires wallet address or account-index mode")
+			}
+			trader, err = lighter.NewLighterTraderV2(
+				config.LighterWalletAddr,
+				config.LighterAPIKeyPrivateKey,
+				config.LighterAPIKeyIndex,
+				false, // Always use mainnet for Lighter
+			)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize LIGHTER trader: %w", err)
 		}
