@@ -45,6 +45,12 @@ func (at *AutoTrader) ensureAIFreeSession() (*store.TradingSession, error) {
 		case store.TradingSessionRunning:
 			return latest, nil
 		case store.TradingSessionTPLocked, store.TradingSessionSLLocked:
+			// A lock is persisted before flattening. If the process died between
+			// those two steps, restart must finish the cleanup while keeping the
+			// session locked; it must never silently resume trading.
+			if cleanupErr := at.flattenLockedAIFreeSession(); cleanupErr != nil {
+				return nil, fmt.Errorf("session locked: %s; cleanup failed: %w", latest.Status, cleanupErr)
+			}
 			return nil, fmt.Errorf("session locked: %s", latest.Status)
 		}
 	}
@@ -157,11 +163,17 @@ func (at *AutoTrader) lockAndFlattenAIFreeSession(v *store.TradingSession, statu
 	if err := ss.Lock(v.ID, status, reason); err != nil {
 		return err
 	}
+	return at.flattenLockedAIFreeSession()
+}
+
+func (at *AutoTrader) flattenLockedAIFreeSession() error {
 	positions, err := at.trader.GetPositions()
 	if err != nil {
 		return err
 	}
+
 	var first error
+	touchedSymbols := make(map[string]struct{}, len(positions))
 	for _, p := range positions {
 		sym, _ := p["symbol"].(string)
 		side, _ := p["side"].(string)
@@ -172,14 +184,29 @@ func (at *AutoTrader) lockAndFlattenAIFreeSession(v *store.TradingSession, statu
 		if qty == 0 || sym == "" {
 			continue
 		}
-		_ = at.trader.CancelAllOrders(sym)
+		touchedSymbols[sym] = struct{}{}
+		if e := at.trader.CancelAllOrders(sym); e != nil && first == nil {
+			first = fmt.Errorf("cancel pending orders for %s: %w", sym, e)
+		}
 		if e := at.emergencyClosePositionAndVerify(sym, strings.ToLower(side), qty); e != nil && first == nil {
 			first = e
 		}
 	}
+
+	// Closing can leave exchange-side protection orders behind. Cancel them
+	// again after flattening so a locked session has no residual orders.
+	for sym := range touchedSymbols {
+		if e := at.trader.CancelAllOrders(sym); e != nil && first == nil {
+			first = fmt.Errorf("cancel residual orders for %s: %w", sym, e)
+		}
+	}
+
 	after, e := at.trader.GetPositions()
-	if e != nil && first == nil {
-		first = e
+	if e != nil {
+		if first == nil {
+			first = e
+		}
+		return first
 	}
 	for _, p := range after {
 		q, _ := p["positionAmt"].(float64)
