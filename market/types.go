@@ -31,19 +31,19 @@ type KlineBar struct {
 
 // TimeframeSeriesData series data for a single timeframe
 type TimeframeSeriesData struct {
-	Timeframe   string     `json:"timeframe"`    // Timeframe identifier, e.g. "5m", "15m", "1h"
-	Klines      []KlineBar `json:"klines"`       // Full OHLCV kline data
-	MidPrices   []float64  `json:"mid_prices"`   // Price series (deprecated, kept for compatibility)
-	EMA20Values []float64  `json:"ema20_values"` // EMA20 series
-	EMA50Values []float64  `json:"ema50_values"` // EMA50 series
-	MACDValues  []float64  `json:"macd_values"`  // MACD series
-	RSI7Values  []float64  `json:"rsi7_values"`  // RSI7 series
-	RSI14Values []float64  `json:"rsi14_values"` // RSI14 series
-	Volume      []float64  `json:"volume"`       // Volume series (deprecated, use Klines)
-	ATR14           float64 `json:"atr14"`             // ATR14
-	EMA200Value     float64 `json:"ema200_value,omitempty"`
-	VolumeMA20      float64 `json:"volume_ma20,omitempty"`
-	VolumeChangePct float64 `json:"volume_change_pct,omitempty"`
+	Timeframe       string     `json:"timeframe"`    // Timeframe identifier, e.g. "5m", "15m", "1h"
+	Klines          []KlineBar `json:"klines"`       // Full OHLCV kline data
+	MidPrices       []float64  `json:"mid_prices"`   // Price series (deprecated, kept for compatibility)
+	EMA20Values     []float64  `json:"ema20_values"` // EMA20 series
+	EMA50Values     []float64  `json:"ema50_values"` // EMA50 series
+	MACDValues      []float64  `json:"macd_values"`  // MACD series
+	RSI7Values      []float64  `json:"rsi7_values"`  // RSI7 series
+	RSI14Values     []float64  `json:"rsi14_values"` // RSI14 series
+	Volume          []float64  `json:"volume"`       // Volume series (deprecated, use Klines)
+	ATR14           float64    `json:"atr14"`        // ATR14
+	EMA200Value     float64    `json:"ema200_value,omitempty"`
+	VolumeMA20      float64    `json:"volume_ma20,omitempty"`
+	VolumeChangePct float64    `json:"volume_change_pct,omitempty"`
 	// Bollinger Bands (period 20, std dev multiplier 2)
 	BOLLUpper  []float64 `json:"boll_upper"`  // Upper band
 	BOLLMiddle []float64 `json:"boll_middle"` // Middle band (SMA)
@@ -234,11 +234,11 @@ const (
 type GridDirection string
 
 const (
-	GridDirectionNeutral   GridDirection = "neutral"     // 50% buy + 50% sell
-	GridDirectionLong      GridDirection = "long"        // 100% buy
-	GridDirectionShort     GridDirection = "short"       // 100% sell
-	GridDirectionLongBias  GridDirection = "long_bias"   // 70% buy + 30% sell (default)
-	GridDirectionShortBias GridDirection = "short_bias"  // 30% buy + 70% sell (default)
+	GridDirectionNeutral   GridDirection = "neutral"    // 50% buy + 50% sell
+	GridDirectionLong      GridDirection = "long"       // 100% buy
+	GridDirectionShort     GridDirection = "short"      // 100% sell
+	GridDirectionLongBias  GridDirection = "long_bias"  // 70% buy + 30% sell (default)
+	GridDirectionShortBias GridDirection = "short_bias" // 30% buy + 70% sell (default)
 )
 
 // GetBuySellRatio returns the buy and sell ratio for this direction

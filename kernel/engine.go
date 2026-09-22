@@ -104,7 +104,7 @@ type Context struct {
 	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
 	MarketDataMap      map[string]*market.Data            `json:"-"`
 	MarketExchange     string                             `json:"-"`
-	MarketPriceGetter  func(string) (float64, error)     `json:"-"`
+	MarketPriceGetter  func(string) (float64, error)      `json:"-"`
 	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
 	OITopDataMap       map[string]*OITopData              `json:"-"`
 	QuantDataMap       map[string]*QuantData              `json:"-"`
@@ -124,8 +124,8 @@ type Decision struct {
 	// Grid actions: "place_buy_limit", "place_sell_limit", "cancel_order", "cancel_all_orders", "pause_grid", "resume_grid", "adjust_grid"
 
 	// Opening position parameters
-	Leverage        int     `json:"leverage,omitempty"`
-	PositionSizeUSD float64 `json:"position_size_usd,omitempty"`
+	Leverage         int      `json:"leverage,omitempty"`
+	PositionSizeUSD  float64  `json:"position_size_usd,omitempty"`
 	StopLoss         float64  `json:"stop_loss,omitempty"`
 	TakeProfit       float64  `json:"take_profit,omitempty"`
 	UpdateStopLoss   *float64 `json:"update_stop_loss,omitempty"`
