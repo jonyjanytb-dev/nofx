@@ -188,6 +188,7 @@ func (c *StrategyConfig) ClampLimits() {
 // must use the exact frontend/backend enum values.
 func (c *StrategyConfig) NormalizeProductSchema() {
 	c.StrategyType = normalizeStrategyType(c.StrategyType)
+	c.DecisionMode = strings.ToLower(strings.TrimSpace(c.DecisionMode))
 	c.CoinSource.StaticCoins = normalizeSymbols(c.CoinSource.StaticCoins)
 	c.CoinSource.ExcludedCoins = normalizeSymbols(c.CoinSource.ExcludedCoins)
 	c.CoinSource.SourceType = normalizeCoinSourceType(c.CoinSource.SourceType)
@@ -303,6 +304,34 @@ func (c *StrategyConfig) NormalizeProductSchema() {
 		}
 		if c.CoinSource.VergexChain == "" {
 			c.CoinSource.VergexChain = "hyperliquid"
+		}
+	}
+
+	if c.DecisionMode == "ai_free" {
+		// ai_free keeps the user's static basket but locks the product data contract.
+		c.CoinSource.SourceType = "static"
+		c.CoinSource.UseAI500 = false
+		c.CoinSource.UseOITop = false
+		c.CoinSource.UseOILow = false
+		c.CoinSource.UseHyperAll = false
+		c.CoinSource.UseHyperMain = false
+		c.Indicators.EnableQuantData = false
+		c.Indicators.EnableQuantOI = false
+		c.Indicators.EnableQuantNetflow = false
+		c.Indicators.EnableOIRanking = false
+		c.Indicators.EnableNetFlowRanking = false
+		c.Indicators.EnablePriceRanking = false
+		c.Indicators.Klines.PrimaryTimeframe = "15m"
+		c.Indicators.Klines.PrimaryCount = 30
+		c.Indicators.Klines.LongerTimeframe = "1h"
+		c.Indicators.Klines.LongerCount = 24
+		c.Indicators.Klines.EnableMultiTimeframe = true
+		c.Indicators.Klines.SelectedTimeframes = []string{"15m", "1h"}
+		if c.RiskControl.MaxLeverage < MinLeverage {
+			c.RiskControl.MaxLeverage = MinLeverage
+		}
+		if c.RiskControl.MaxLeverage > MaxAltLeverage {
+			c.RiskControl.MaxLeverage = MaxAltLeverage
 		}
 	}
 
@@ -559,7 +588,7 @@ func normalizeStrategyConfigPatch(patch map[string]any) {
 		}
 	}
 
-	aiKeys := []string{"coin_source", "indicators", "risk_control", "prompt_sections", "custom_prompt"}
+	aiKeys := []string{"decision_mode", "coin_source", "indicators", "risk_control", "prompt_sections", "custom_prompt"}
 	for _, key := range aiKeys {
 		value, ok := patch[key]
 		if !ok {
@@ -662,6 +691,8 @@ func (Strategy) TableName() string { return "strategies" }
 type StrategyConfig struct {
 	// Strategy type: "ai_trading" (default) or "grid_trading"
 	StrategyType string `json:"strategy_type,omitempty"`
+	// Decision mode: empty/legacy keeps NOFX behavior; "ai_free" enables the customer-prompt autonomous mode.
+	DecisionMode string `json:"-"`
 
 	// language setting: "zh" for Chinese, "en" for English
 	// This determines the language used for data formatting and prompt generation
@@ -685,6 +716,7 @@ type StrategyConfig struct {
 
 // AIStrategyConfig contains fields only used by AI trading strategies.
 type AIStrategyConfig struct {
+	DecisionMode   string               `json:"decision_mode,omitempty"`
 	CoinSource     CoinSourceConfig     `json:"coin_source"`
 	Indicators     IndicatorConfig      `json:"indicators"`
 	CustomPrompt   string               `json:"custom_prompt,omitempty"`
@@ -722,6 +754,7 @@ func (c StrategyConfig) MarshalJSON() ([]byte, error) {
 		out.GridConfig = c.GridConfig
 	} else {
 		out.AIConfig = &AIStrategyConfig{
+			DecisionMode:   c.DecisionMode,
 			CoinSource:     c.CoinSource,
 			Indicators:     c.Indicators,
 			CustomPrompt:   c.CustomPrompt,
@@ -761,6 +794,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 	c.PublishConfig = raw.PublishConfig
 
 	if raw.AIConfig != nil {
+		c.DecisionMode = raw.AIConfig.DecisionMode
 		c.CoinSource = raw.AIConfig.CoinSource
 		c.Indicators = raw.AIConfig.Indicators
 		c.CustomPrompt = raw.AIConfig.CustomPrompt
@@ -961,6 +995,13 @@ type ExternalDataSource struct {
 type RiskControlConfig struct {
 	// Max number of coins held simultaneously (CODE ENFORCED)
 	MaxPositions int `json:"max_positions"`
+
+	// ai_free hard-risk controls. Legacy NOFX paths ignore these fields.
+	MaxLeverage           int     `json:"max_leverage,omitempty"`
+	ManagedCapitalUSDT    float64 `json:"managed_capital_usdt,omitempty"`
+	MaxLossPerTradeUSDT   float64 `json:"max_loss_per_trade_usdt,omitempty"`
+	AccountTakeProfitUSDT float64 `json:"account_take_profit_usdt,omitempty"`
+	AccountStopLossUSDT   float64 `json:"account_stop_loss_usdt,omitempty"`
 
 	// BTC/ETH exchange leverage for opening positions (AI guided)
 	BTCETHMaxLeverage int `json:"btc_eth_max_leverage"`
