@@ -179,6 +179,63 @@ func NewLighterTraderV2(walletAddr, apiKeyPrivateKeyHex string, apiKeyIndex int,
 	return trader, nil
 }
 
+// NewLighterTraderV2WithAccountIndex creates a LIGHTER trader when the caller
+// already has the Lighter account index. Herman stores this value directly and
+// intentionally does not persist the user's L1 wallet address.
+func NewLighterTraderV2WithAccountIndex(accountIndex int64, apiKeyPrivateKeyHex string, apiKeyIndex int, testnet bool) (*LighterTraderV2, error) {
+	if accountIndex < 0 {
+		return nil, fmt.Errorf("account index must be >= 0")
+	}
+	if apiKeyPrivateKeyHex == "" {
+		return nil, fmt.Errorf("API Key private key is required")
+	}
+
+	baseURL := "https://mainnet.zklighter.elliot.ai"
+	chainID := uint32(304)
+	if testnet {
+		baseURL = "https://testnet.zklighter.elliot.ai"
+		chainID = uint32(300)
+	}
+
+	httpClient := lighterHTTP.NewClient(baseURL)
+	trader := &LighterTraderV2{
+		ctx:              context.Background(),
+		client:           &http.Client{Timeout: 30 * time.Second},
+		baseURL:          baseURL,
+		testnet:          testnet,
+		chainID:          chainID,
+		httpClient:       httpClient,
+		apiKeyPrivateKey: apiKeyPrivateKeyHex,
+		apiKeyIndex:      uint8(apiKeyIndex),
+		accountIndex:     accountIndex,
+		symbolPrecision:  make(map[string]SymbolPrecision),
+		marketIndexMap:   make(map[string]uint16),
+	}
+
+	txClient, err := lighterClient.NewTxClient(
+		httpClient,
+		apiKeyPrivateKeyHex,
+		trader.accountIndex,
+		trader.apiKeyIndex,
+		trader.chainID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TxClient: %w", err)
+	}
+	trader.txClient = txClient
+
+	if err := trader.checkClient(); err != nil {
+		trader.apiKeyValid = false
+		logger.Warnf("⚠️  API Key verification FAILED: %v", err)
+	} else {
+		trader.apiKeyValid = true
+	}
+
+	logger.Infof("✓ LIGHTER trader initialized by account index (account=%d, apiKey=%d, testnet=%v, apiKeyValid=%v)",
+		trader.accountIndex, trader.apiKeyIndex, testnet, trader.apiKeyValid)
+	return trader, nil
+}
+
 // initializeAccount Initialize account information (get account index)
 func (t *LighterTraderV2) initializeAccount() error {
 	// Get account info by L1 address
