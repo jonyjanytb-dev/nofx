@@ -138,8 +138,8 @@ func (f *fakeAIFreeTrader) CancelAllOrders(string) error {
 	f.cancelAllCalls++
 	return nil
 }
-func (f *fakeAIFreeTrader) CancelStopOrders(string) error                        { return nil }
-func (f *fakeAIFreeTrader) FormatQuantity(string, float64) (string, error)       { return "1", nil }
+func (f *fakeAIFreeTrader) CancelStopOrders(string) error                  { return nil }
+func (f *fakeAIFreeTrader) FormatQuantity(string, float64) (string, error) { return "1", nil }
 func (f *fakeAIFreeTrader) GetOrderStatus(string, string) (map[string]interface{}, error) {
 	return map[string]interface{}{"status": "FILLED"}, nil
 }
