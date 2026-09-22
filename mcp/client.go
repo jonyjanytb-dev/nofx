@@ -269,6 +269,9 @@ func (client *Client) BuildMCPRequestBody(systemPrompt, userPrompt string) map[s
 		"model":    client.Model,
 		"messages": messages,
 	}
+	if client.Provider == ProviderDeepSeek && client.Cfg != nil && client.Cfg.DeepSeekThinkingDisabled {
+		requestBody["thinking"] = map[string]string{"type": "disabled"}
+	}
 	if modelSupportsCustomTemperature(client.Model) {
 		requestBody["temperature"] = client.Cfg.Temperature
 	}
