@@ -40,7 +40,10 @@ type TimeframeSeriesData struct {
 	RSI7Values  []float64  `json:"rsi7_values"`  // RSI7 series
 	RSI14Values []float64  `json:"rsi14_values"` // RSI14 series
 	Volume      []float64  `json:"volume"`       // Volume series (deprecated, use Klines)
-	ATR14       float64    `json:"atr14"`        // ATR14
+	ATR14           float64 `json:"atr14"`             // ATR14
+	EMA200Value     float64 `json:"ema200_value,omitempty"`
+	VolumeMA20      float64 `json:"volume_ma20,omitempty"`
+	VolumeChangePct float64 `json:"volume_change_pct,omitempty"`
 	// Bollinger Bands (period 20, std dev multiplier 2)
 	BOLLUpper  []float64 `json:"boll_upper"`  // Upper band
 	BOLLMiddle []float64 `json:"boll_middle"` // Middle band (SMA)
