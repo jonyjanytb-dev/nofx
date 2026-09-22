@@ -478,6 +478,15 @@ func formatTimeframeData(sb *strings.Builder, data *TimeframeSeriesData) {
 	if data.ATR14 > 0 {
 		sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
 	}
+	if data.EMA200Value > 0 {
+		sb.WriteString(fmt.Sprintf("EMA200: %.4f\n", data.EMA200Value))
+	}
+	if data.VolumeMA20 > 0 {
+		sb.WriteString(fmt.Sprintf("Volume MA20: %.4f\n", data.VolumeMA20))
+	}
+	if data.VolumeChangePct != 0 {
+		sb.WriteString(fmt.Sprintf("Volume change: %+.2f%%\n", data.VolumeChangePct))
+	}
 
 	sb.WriteString("\n")
 }
