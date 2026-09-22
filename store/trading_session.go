@@ -91,8 +91,8 @@ func (s *TradingSessionStore) Lock(id uint64, status, reason string) error {
 
 func (s *PositionStore) SessionRealizedPnL(traderID string, startedAtMs int64) (pnl, fees float64, err error) {
 	var row struct {
-		PnL  float64
-		Fees float64
+		PnL  float64 `gorm:"column:pnl"`
+		Fees float64 `gorm:"column:fees"`
 	}
 	err = s.db.Model(&TraderPosition{}).
 		Select("COALESCE(SUM(realized_pnl),0) AS pnl, COALESCE(SUM(fee),0) AS fees").
