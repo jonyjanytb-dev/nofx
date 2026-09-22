@@ -35,6 +35,9 @@ func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actio
 	case "close_short":
 		return at.executeCloseShortWithRecord(decision, actionRecord)
 	case "hold":
+		if at.isAIFreeMode() {
+			return at.maintainAIFreeProtection(decision)
+		}
 		if at.usesSignalManagedExit() {
 			if err := at.trader.CancelTakeProfitOrders(decision.Symbol); err != nil {
 				logger.Infof("  ⚠ Failed to remove fixed take profit for signal-managed hold: %v", err)
@@ -63,6 +66,10 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		return err
 	}
 
+	if at.isAIFreeMode() && sameSymbolPositionExists(positions, decision.Symbol) {
+		return fmt.Errorf("❌ %s already has an open position; ai_free allows only one position per symbol", decision.Symbol)
+	}
+
 	// Check if there's already a position in the same symbol and direction
 	for _, pos := range positions {
 		if pos["symbol"] == decision.Symbol && pos["side"] == "long" {
@@ -70,13 +77,26 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		}
 	}
 
-	// Get current price and reject invalid protection before opening exposure.
-	marketData, err := market.GetWithExchange(decision.Symbol, at.exchange)
-	if err != nil {
-		return fmt.Errorf("failed to get market data for %s: %w", decision.Symbol, err)
-	}
-	if err := validateProtectionPrices(decision.Action, marketData.CurrentPrice, decision.StopLoss, decision.TakeProfit, at.usesSignalManagedExit()); err != nil {
-		return err
+	// Validate against the actual execution venue price in ai_free.
+	var marketData *market.Data
+	if at.isAIFreeMode() {
+		price, priceErr := at.trader.GetMarketPrice(decision.Symbol)
+		if priceErr != nil {
+			return fmt.Errorf("failed to get execution market price for %s: %w", decision.Symbol, priceErr)
+		}
+		marketData = &market.Data{Symbol: decision.Symbol, CurrentPrice: price}
+		if err := validateAIFreeProtectionPrices(decision.Action, price, decision.StopLoss, decision.TakeProfit); err != nil {
+			return err
+		}
+	} else {
+		var marketErr error
+		marketData, marketErr = market.GetWithExchange(decision.Symbol, at.exchange)
+		if marketErr != nil {
+			return fmt.Errorf("failed to get market data for %s: %w", decision.Symbol, marketErr)
+		}
+		if err := validateProtectionPrices(decision.Action, marketData.CurrentPrice, decision.StopLoss, decision.TakeProfit, at.usesSignalManagedExit()); err != nil {
+			return err
+		}
 	}
 
 	// Get balance (needed for multiple checks)
@@ -99,12 +119,26 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		equity = availableBalance // Fallback to available balance
 	}
 
-	at.applyAutopilotFullSizeOpen(decision, equity)
+	if at.isAIFreeMode() {
+		adjustment, riskErr := at.applyAIFreeOpenRiskBudget(decision, marketData.CurrentPrice, availableBalance, positions)
+		if riskErr != nil {
+			return riskErr
+		}
+		if adjustment != nil {
+			actionRecord.RequestedPositionSizeUSD = adjustment.RequestedNotional
+			actionRecord.AdjustedPositionSizeUSD = adjustment.AllowedNotional
+			actionRecord.EstimatedRiskUSD = adjustment.EstimatedRiskUSDT
+			actionRecord.MaxRiskUSD = at.config.StrategyConfig.RiskControl.MaxLossPerTradeUSDT
+			actionRecord.RiskAdjusted = adjustment.Adjusted
+		}
+	} else {
+		at.applyAutopilotFullSizeOpen(decision, equity)
 
-	// [CODE ENFORCED] Position Value Ratio Check: position_value <= equity × ratio
-	adjustedPositionSize, wasCapped := at.enforcePositionValueRatio(decision.PositionSizeUSD, equity, decision.Symbol)
-	if wasCapped {
-		decision.PositionSizeUSD = adjustedPositionSize
+		// [CODE ENFORCED] Position Value Ratio Check: position_value <= equity × ratio
+		adjustedPositionSize, wasCapped := at.enforcePositionValueRatio(decision.PositionSizeUSD, equity, decision.Symbol)
+		if wasCapped {
+			decision.PositionSizeUSD = adjustedPositionSize
+		}
 	}
 
 	// ⚠️ Auto-adjust position size if insufficient margin
@@ -162,7 +196,13 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 	if err := at.trader.SetStopLoss(decision.Symbol, "LONG", quantity, decision.StopLoss); err != nil {
 		return at.closeUnprotectedPosition(decision.Symbol, "long", quantity, fmt.Errorf("failed to set mandatory stop loss: %w", err))
 	}
-	if at.usesSignalManagedExit() {
+	if at.isAIFreeMode() {
+		if decision.TakeProfit > 0 {
+			if err := at.trader.SetTakeProfit(decision.Symbol, "LONG", quantity, decision.TakeProfit); err != nil {
+				logger.Infof("  ⚠ Optional take profit was not created for %s: %v; mandatory stop remains active", decision.Symbol, err)
+			}
+		}
+	} else if at.usesSignalManagedExit() {
 		actionRecord.TakeProfit = 0
 		logger.Infof("  ✓ Fixed take profit skipped: Claw402 direction signal manages ordinary exits")
 	} else if err := at.trader.SetTakeProfit(decision.Symbol, "LONG", quantity, decision.TakeProfit); err != nil {
@@ -187,6 +227,10 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 		return err
 	}
 
+	if at.isAIFreeMode() && sameSymbolPositionExists(positions, decision.Symbol) {
+		return fmt.Errorf("❌ %s already has an open position; ai_free allows only one position per symbol", decision.Symbol)
+	}
+
 	// Check if there's already a position in the same symbol and direction
 	for _, pos := range positions {
 		if pos["symbol"] == decision.Symbol && pos["side"] == "short" {
@@ -194,13 +238,26 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 		}
 	}
 
-	// Get current price and reject invalid protection before opening exposure.
-	marketData, err := market.GetWithExchange(decision.Symbol, at.exchange)
-	if err != nil {
-		return fmt.Errorf("failed to get market data for %s: %w", decision.Symbol, err)
-	}
-	if err := validateProtectionPrices(decision.Action, marketData.CurrentPrice, decision.StopLoss, decision.TakeProfit, at.usesSignalManagedExit()); err != nil {
-		return err
+	// Validate against the actual execution venue price in ai_free.
+	var marketData *market.Data
+	if at.isAIFreeMode() {
+		price, priceErr := at.trader.GetMarketPrice(decision.Symbol)
+		if priceErr != nil {
+			return fmt.Errorf("failed to get execution market price for %s: %w", decision.Symbol, priceErr)
+		}
+		marketData = &market.Data{Symbol: decision.Symbol, CurrentPrice: price}
+		if err := validateAIFreeProtectionPrices(decision.Action, price, decision.StopLoss, decision.TakeProfit); err != nil {
+			return err
+		}
+	} else {
+		var marketErr error
+		marketData, marketErr = market.GetWithExchange(decision.Symbol, at.exchange)
+		if marketErr != nil {
+			return fmt.Errorf("failed to get market data for %s: %w", decision.Symbol, marketErr)
+		}
+		if err := validateProtectionPrices(decision.Action, marketData.CurrentPrice, decision.StopLoss, decision.TakeProfit, at.usesSignalManagedExit()); err != nil {
+			return err
+		}
 	}
 
 	// Get balance (needed for multiple checks)
@@ -223,12 +280,26 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 		equity = availableBalance // Fallback to available balance
 	}
 
-	at.applyAutopilotFullSizeOpen(decision, equity)
+	if at.isAIFreeMode() {
+		adjustment, riskErr := at.applyAIFreeOpenRiskBudget(decision, marketData.CurrentPrice, availableBalance, positions)
+		if riskErr != nil {
+			return riskErr
+		}
+		if adjustment != nil {
+			actionRecord.RequestedPositionSizeUSD = adjustment.RequestedNotional
+			actionRecord.AdjustedPositionSizeUSD = adjustment.AllowedNotional
+			actionRecord.EstimatedRiskUSD = adjustment.EstimatedRiskUSDT
+			actionRecord.MaxRiskUSD = at.config.StrategyConfig.RiskControl.MaxLossPerTradeUSDT
+			actionRecord.RiskAdjusted = adjustment.Adjusted
+		}
+	} else {
+		at.applyAutopilotFullSizeOpen(decision, equity)
 
-	// [CODE ENFORCED] Position Value Ratio Check: position_value <= equity × ratio
-	adjustedPositionSize, wasCapped := at.enforcePositionValueRatio(decision.PositionSizeUSD, equity, decision.Symbol)
-	if wasCapped {
-		decision.PositionSizeUSD = adjustedPositionSize
+		// [CODE ENFORCED] Position Value Ratio Check: position_value <= equity × ratio
+		adjustedPositionSize, wasCapped := at.enforcePositionValueRatio(decision.PositionSizeUSD, equity, decision.Symbol)
+		if wasCapped {
+			decision.PositionSizeUSD = adjustedPositionSize
+		}
 	}
 
 	// ⚠️ Auto-adjust position size if insufficient margin
@@ -286,7 +357,13 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 	if err := at.trader.SetStopLoss(decision.Symbol, "SHORT", quantity, decision.StopLoss); err != nil {
 		return at.closeUnprotectedPosition(decision.Symbol, "short", quantity, fmt.Errorf("failed to set mandatory stop loss: %w", err))
 	}
-	if at.usesSignalManagedExit() {
+	if at.isAIFreeMode() {
+		if decision.TakeProfit > 0 {
+			if err := at.trader.SetTakeProfit(decision.Symbol, "SHORT", quantity, decision.TakeProfit); err != nil {
+				logger.Infof("  ⚠ Optional take profit was not created for %s: %v; mandatory stop remains active", decision.Symbol, err)
+			}
+		}
+	} else if at.usesSignalManagedExit() {
 		actionRecord.TakeProfit = 0
 		logger.Infof("  ✓ Fixed take profit skipped: Claw402 direction signal manages ordinary exits")
 	} else if err := at.trader.SetTakeProfit(decision.Symbol, "SHORT", quantity, decision.TakeProfit); err != nil {
