@@ -8,7 +8,7 @@ import (
 
 func TestAIFreePromptKeepsCustomerStrategyWithoutLegacyAlpha(t *testing.T) {
 	cfg := store.GetAIFreeStrategyConfig("en")
-	cfg.CustomPrompt = "Trade breakouts only when I say so."
+	cfg.CustomPrompt = "  Trade breakouts only when I say so.\nKeep this line exactly.  "
 	eng := NewStrategyEngine(&cfg)
 	got := eng.BuildSystemPrompt(1000, "balanced")
 	if !strings.Contains(got, cfg.CustomPrompt) {
