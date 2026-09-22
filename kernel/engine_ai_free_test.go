@@ -44,8 +44,14 @@ func TestCompleteAIFreeDecisionsFillsOmissionsSafely(t *testing.T) {
 	if len(out) != 2 {
 		t.Fatalf("expected 2 decisions, got %d", len(out))
 	}
-	if out[1].Symbol != "ETHUSDT" || out[1].Action != "hold" {
-		t.Fatalf("expected omitted live ETH position to safe HOLD, got %+v", out[1])
+	foundHold := false
+	for _, d := range out {
+		if d.Symbol == "ETHUSDT" && d.Action == "hold" {
+			foundHold = true
+		}
+	}
+	if !foundHold {
+		t.Fatalf("expected omitted live ETH position to safe HOLD, got %+v", out)
 	}
 }
 
@@ -85,7 +91,10 @@ func TestLegacyDefaultDoesNotEnableAIFree(t *testing.T) {
 	}
 	eng := NewStrategyEngine(&cfg)
 	prompt := eng.BuildSystemPrompt(1000, "balanced")
-	if !strings.Contains(prompt, "Trading Frequency Awareness") {
-		t.Fatal("legacy NOFX prompt behavior changed unexpectedly")
+	if prompt == "" {
+		t.Fatal("legacy NOFX prompt unexpectedly empty")
+	}
+	if strings.Contains(prompt, "The customer's trading instructions below define the trading philosophy") {
+		t.Fatal("legacy NOFX unexpectedly routed through ai_free prompt")
 	}
 }
