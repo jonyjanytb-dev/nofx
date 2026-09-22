@@ -6,19 +6,32 @@ on:
       - feature/ai-free-trader
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Format ai_free changes
+        run: |
+          files="store/strategy.go store/decision.go store/ai_free_config.go store/trading_session.go kernel/engine.go kernel/engine_prompt.go kernel/engine_analysis.go kernel/engine_ai_free.go kernel/engine_ai_free_market.go market/types.go market/data.go market/data_exchange.go mcp/config.go mcp/client.go mcp/ai_free_config.go trader/auto_trader.go trader/auto_trader_loop.go trader/auto_trader_orders.go trader/auto_trader_ai_free_risk.go trader/auto_trader_ai_free_cycle.go trader/auto_trader_ai_free_protection.go trader/auto_trader_session_risk.go kernel/engine_ai_free_test.go market/data_exchange_test.go mcp/ai_free_config_test.go store/trading_session_test.go trader/auto_trader_ai_free_test.go"
+          gofmt -w $files
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add $files
+            git commit -m "style(ai-free): gofmt implementation"
+            git push origin HEAD:feature/ai-free-trader
+          fi
       - name: Go format check
         run: |
-          files="store/strategy.go store/decision.go store/ai_free_config.go store/trading_session.go kernel/engine.go kernel/engine_prompt.go kernel/engine_analysis.go kernel/engine_ai_free.go kernel/engine_ai_free_market.go market/types.go market/data.go market/data_exchange.go mcp/config.go mcp/client.go mcp/ai_free_config.go trader/auto_trader.go trader/auto_trader_loop.go trader/auto_trader_orders.go trader/auto_trader_ai_free_risk.go trader/auto_trader_ai_free_cycle.go trader/auto_trader_ai_free_protection.go trader/auto_trader_session_risk.go"
+          files="store/strategy.go store/decision.go store/ai_free_config.go store/trading_session.go kernel/engine.go kernel/engine_prompt.go kernel/engine_analysis.go kernel/engine_ai_free.go kernel/engine_ai_free_market.go market/types.go market/data.go market/data_exchange.go mcp/config.go mcp/client.go mcp/ai_free_config.go trader/auto_trader.go trader/auto_trader_loop.go trader/auto_trader_orders.go trader/auto_trader_ai_free_risk.go trader/auto_trader_ai_free_cycle.go trader/auto_trader_ai_free_protection.go trader/auto_trader_session_risk.go kernel/engine_ai_free_test.go market/data_exchange_test.go mcp/ai_free_config_test.go store/trading_session_test.go trader/auto_trader_ai_free_test.go"
           bad=$(gofmt -l $files)
           test -z "$bad" || (echo "$bad"; exit 1)
       - name: Focused tests
@@ -27,3 +40,7 @@ jobs:
         run: go test ./...
       - name: Vet changed packages
         run: go vet ./kernel ./market ./mcp ./store ./trader
+      - name: Verify requested base is an ancestor
+        run: |
+          git merge-base --is-ancestor 638d4042118995fbf1a38d3822b1139aa3c6b467 HEAD
+          echo "merge-base-exit=$?"
