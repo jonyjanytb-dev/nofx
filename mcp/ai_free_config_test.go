@@ -24,3 +24,10 @@ func TestConfigureAIFreeClientDisablesDeepSeekThinking(t *testing.T) {
 		t.Fatalf("expected temperature 0.2, got %v", base.Cfg.Temperature)
 	}
 }
+
+
+func TestAIFreeDeepSeekModelMatchesCurrentPublicAPI(t *testing.T) {
+	if AIFreeDeepSeekModel != "deepseek-v4-flash" {
+		t.Fatalf("unexpected ai_free DeepSeek model: %s", AIFreeDeepSeekModel)
+	}
+}
