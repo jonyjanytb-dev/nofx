@@ -114,3 +114,17 @@ func TestLoadRuntimeConfigRejectsRiskOutsideManagedCapital(t *testing.T) {
 		t.Fatal("expected per-trade risk above managed capital to fail")
 	}
 }
+
+
+func TestCheckPayloadPinsDeepSeekV4Flash(t *testing.T) {
+	cfg := runtimeConfig{
+		TraderID:     "customer-test",
+		Exchange:     "okx",
+		MaxPositions: 3,
+		MaxLeverage:  5,
+	}
+	payload := checkPayload(cfg)
+	if payload["model"] != "deepseek-v4-flash" {
+		t.Fatalf("unexpected model: %#v", payload["model"])
+	}
+}
