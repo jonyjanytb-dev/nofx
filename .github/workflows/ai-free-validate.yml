@@ -6,6 +6,7 @@ on:
       - feature/ai-free-trader
       - feature/ai-free-trader-reviewed
       - feature/ai-free-herman-runner
+      - fix/ai-free-deepseek-v4-flash
 
 permissions:
   contents: read
