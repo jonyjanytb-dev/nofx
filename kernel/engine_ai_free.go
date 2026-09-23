@@ -41,6 +41,8 @@ INTERFACE RULES
 8. For HOLD, you may optionally send update_stop_loss and update_take_profit. Omit a field to leave it unchanged. update_take_profit=0 explicitly removes TP. Runtime allows stop changes only when they reduce risk.
 9. Confidence is descriptive; it never overrides Runtime risk.
 10. Keep the visible analysis concise. Do not expose hidden/private chain-of-thought.
+11. Write <reasoning> and each decision.reasoning in concise Simplified Chinese. Keep JSON keys and action values in English.
+12. If confidence is supplied, use an integer from 0 to 100 (for example 60, not 0.6).
 
 Allowed actions: open_long, open_short, close_long, close_short, hold, wait.
 
@@ -53,6 +55,13 @@ Return concise user-visible analysis in <reasoning> and a strict JSON array in <
 		r.AccountTakeProfitUSDT,
 		r.AccountStopLossUSDT,
 	)
+}
+
+func requireAIFreeMarketData(ctx *Context, engine *StrategyEngine) error {
+	if engine != nil && engine.usesAIFreeMode() && ctx != nil && len(ctx.MarketDataMap) == 0 && (len(ctx.CandidateCoins) > 0 || len(ctx.Positions) > 0) {
+		return fmt.Errorf("AI decision paused: no valid exchange K-lines for selected symbols")
+	}
+	return nil
 }
 
 func validateAIFreeDecisions(decisions []Decision, maxLeverage int) error {

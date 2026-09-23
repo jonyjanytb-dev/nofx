@@ -71,6 +71,27 @@ func TestAIFreeMalformedResponseFallsBackToExplicitWait(t *testing.T) {
 	}
 }
 
+func TestAIFreeAcceptsFractionalConfidenceAsPercentage(t *testing.T) {
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "BTCUSDT"}}}
+	response := `<reasoning>等待更清晰的行情。</reasoning><decision>[{"symbol":"BTCUSDT","action":"wait","confidence":0.6,"reasoning":"行情不足，继续等待。"}]</decision>`
+	out, err := parseAIFreeDecisionResponse(response, ctx, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Decisions) != 1 || out.Decisions[0].Confidence != 60 || out.Decisions[0].Action != "wait" {
+		t.Fatalf("unexpected parsed decision: %+v", out.Decisions)
+	}
+}
+
+func TestAIFreeRejectsDecisionWithoutMarketData(t *testing.T) {
+	cfg := store.GetAIFreeStrategyConfig("en")
+	engine := NewStrategyEngine(&cfg)
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "BTCUSDT"}}}
+	if err := requireAIFreeMarketData(ctx, engine); err == nil {
+		t.Fatal("AI must not decide or place orders when every market candle feed is empty")
+	}
+}
+
 func TestAIFreePresetUsesLockedTimeframesAndUniverse(t *testing.T) {
 	cfg := store.GetAIFreeStrategyConfig("en")
 	if cfg.DecisionMode != "ai_free" || cfg.Indicators.Klines.PrimaryTimeframe != "15m" || cfg.Indicators.Klines.PrimaryCount != 30 {

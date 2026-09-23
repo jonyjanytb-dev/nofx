@@ -144,6 +144,8 @@ func GetWithTimeframesAndExchange(
 		)
 		if isXyzAsset || exchange == "hyperliquid" {
 			klines, err = getKlinesFromHyperliquid(symbol, tf, fetchLimit)
+		} else if exchange == "okx" {
+			klines, err = getKlinesFromOKX(symbol, tf, fetchLimit)
 		} else {
 			klines, err = getKlinesFromCoinAnkStrict(symbol, tf, exchange, fetchLimit)
 		}

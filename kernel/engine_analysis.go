@@ -84,6 +84,9 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			return nil, fmt.Errorf("failed to fetch market data: %w", err)
 		}
 	}
+	if err := requireAIFreeMarketData(ctx, engine); err != nil {
+		return nil, err
+	}
 	pruneCandidateCoinsWithoutMarketData(ctx)
 	enrichVergexDataWithStrategy(ctx, engine)
 
