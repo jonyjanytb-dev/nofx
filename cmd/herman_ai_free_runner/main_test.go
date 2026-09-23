@@ -115,7 +115,6 @@ func TestLoadRuntimeConfigRejectsRiskOutsideManagedCapital(t *testing.T) {
 	}
 }
 
-
 func TestCheckPayloadPinsDeepSeekV4Flash(t *testing.T) {
 	cfg := runtimeConfig{
 		TraderID:     "customer-test",
