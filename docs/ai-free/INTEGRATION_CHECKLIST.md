@@ -27,7 +27,7 @@ SelectedTimeframes: []string{"15m","1h"}
 
 ## trader
 
-- DeepSeek `deepseek-flash`, explicit non-thinking, 60s timeout, one attempt.
+- DeepSeek `deepseek-v4-flash`, explicit non-thinking, 60s timeout, one attempt.
 - 15m close-aligned loop.
 - no legacy drawdown monitor in ai_free.
 - no generic trade throttle or Vergex direction policy in ai_free.
