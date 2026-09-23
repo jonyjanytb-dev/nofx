@@ -25,7 +25,6 @@ func TestConfigureAIFreeClientDisablesDeepSeekThinking(t *testing.T) {
 	}
 }
 
-
 func TestAIFreeDeepSeekModelMatchesCurrentPublicAPI(t *testing.T) {
 	if AIFreeDeepSeekModel != "deepseek-v4-flash" {
 		t.Fatalf("unexpected ai_free DeepSeek model: %s", AIFreeDeepSeekModel)
