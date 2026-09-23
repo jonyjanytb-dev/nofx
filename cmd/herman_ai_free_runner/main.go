@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"nofx/logger"
+	"nofx/mcp"
 	"nofx/store"
 	"nofx/trader"
 	"os"
@@ -252,7 +253,7 @@ func buildAutoTraderConfig(cfg runtimeConfig, strategy *store.StrategyConfig) tr
 func checkPayload(cfg runtimeConfig) map[string]interface{} {
 	return map[string]interface{}{
 		"mode":          "ai_free",
-		"model":         "deepseek-flash",
+		"model":         mcp.AIFreeDeepSeekModel,
 		"exchange":      cfg.Exchange,
 		"trader_id":     cfg.TraderID,
 		"max_positions": cfg.MaxPositions,
