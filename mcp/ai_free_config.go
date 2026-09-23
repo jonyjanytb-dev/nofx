@@ -2,6 +2,8 @@ package mcp
 
 import "time"
 
+const AIFreeDeepSeekModel = "deepseek-v4-flash"
+
 // ConfigureAIFreeClient applies transport behavior required by ai_free without
 // changing legacy provider behavior.
 func ConfigureAIFreeClient(client AIClient) {
