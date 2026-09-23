@@ -229,7 +229,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	if config.StrategyConfig != nil && strings.EqualFold(strings.TrimSpace(config.StrategyConfig.DecisionMode), "ai_free") {
 		config.AIModel = "deepseek"
 		config.UseQwen = false
-		config.CustomModelName = "deepseek-flash"
+		config.CustomModelName = mcp.AIFreeDeepSeekModel
 		config.ScanInterval = 15 * time.Minute
 	}
 
