@@ -46,7 +46,25 @@ INTERFACE RULES
 
 Allowed actions: open_long, open_short, close_long, close_short, hold, wait.
 
-Return concise user-visible analysis in <reasoning> and a strict JSON array in <decision>.`,
+OUTPUT CONTRACT (same <reasoning>/<decision> JSON protocol as NOFX)
+The JSON in <decision> is the only executable instruction. Prose about a possible trade is not an order.
+Return exactly one JSON object per selected symbol, with exact symbol names from the supplied data.
+An OPEN object must include symbol, action, leverage, position_size_usd, stop_loss, reasoning; take_profit and confidence may also be supplied.
+position_size_usd is required for open_long and open_short: it is a positive USDT NOTIONAL value, not margin or a phrase in <reasoning>.
+stop_loss must be a positive protective price derived from current market data. Never copy example numbers.
+If you cannot provide all required OPEN fields, output wait instead; never omit a field and expect Runtime to infer it from prose.
+For wait, hold, or close actions, do not invent an opening size.
+Only output an OPEN when the trading thesis and hard runtime boundaries permit it; do not open merely to match this example.
+
+<reasoning>
+用简洁中文说明本轮判断；仅描述与下方 JSON 一致的交易动作。
+</reasoning>
+<decision>
+[
+  {"symbol": "EXAMPLEUSDT", "action": "open_long", "leverage": 2, "position_size_usd": 10, "stop_loss": 90, "take_profit": 0, "confidence": 70, "reasoning": "示例格式，实际决策请按当前行情和风控计算"}
+]
+</decision>
+EXAMPLEUSDT is fictional and the numbers above are FORMAT ONLY. Replace the entire object with one decision per actual selected symbol; use wait with symbol, action and reasoning when no valid OPEN exists.`,
 		e.config.CustomPrompt,
 		r.ManagedCapitalUSDT,
 		r.MaxLossPerTradeUSDT,

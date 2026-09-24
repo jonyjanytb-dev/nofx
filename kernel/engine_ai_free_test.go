@@ -21,6 +21,44 @@ func TestAIFreePromptKeepsCustomerStrategyWithoutLegacyAlpha(t *testing.T) {
 	}
 }
 
+func TestAIFreePromptRequiresStructuredOpenOrderFields(t *testing.T) {
+	cfg := store.GetAIFreeStrategyConfig("en")
+	eng := NewStrategyEngine(&cfg)
+	prompt := eng.BuildSystemPrompt(20, "balanced")
+	for _, required := range []string{
+		"<reasoning>", "</reasoning>", "<decision>", "</decision>",
+		`"action": "open_long"`, `"position_size_usd":`, `"stop_loss":`, `"reasoning":`,
+		"position_size_usd is required for open_long and open_short",
+		"If you cannot provide all required OPEN fields, output wait instead",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Errorf("AI-free decision contract missing %q", required)
+		}
+	}
+	example, err := extractDecisions(prompt)
+	if err != nil || len(example) != 1 || example[0].PositionSizeUSD <= 0 || example[0].StopLoss <= 0 {
+		t.Fatalf("AI-free prompt must contain a parseable NOFX OPEN example: decisions=%+v err=%v", example, err)
+	}
+}
+
+func TestAIFreeOpenInProseWithoutOrderSizeStillFailsClosed(t *testing.T) {
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "BTCUSDT"}}}
+	response := `<reasoning>准备以 300 USDT 名义价值做空 BTC。</reasoning><decision>[{"symbol":"BTCUSDT","action":"open_short","leverage":5,"stop_loss":84500,"reasoning":"价格走弱"}]</decision>`
+	_, err := parseAIFreeDecisionResponse(response, ctx, 5)
+	if err == nil || !strings.Contains(err.Error(), "position_size_usd") {
+		t.Fatalf("OPEN without structured position_size_usd must fail closed, got %v", err)
+	}
+}
+
+func TestAIFreeStructuredOpenShortParses(t *testing.T) {
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "BTCUSDT"}}}
+	response := `<reasoning>BTC 走弱，计划做空。</reasoning><decision>[{"symbol":"BTCUSDT","action":"open_short","leverage":5,"position_size_usd":50,"stop_loss":84500,"take_profit":0,"reasoning":"价格走弱"}]</decision>`
+	out, err := parseAIFreeDecisionResponse(response, ctx, 5)
+	if err != nil || len(out.Decisions) != 1 || out.Decisions[0].PositionSizeUSD != 50 {
+		t.Fatalf("valid structured OPEN must parse without guessing prose: decision=%+v err=%v", out, err)
+	}
+}
+
 func TestAIFreeValidatorRequiresSLButAllowsNoTP(t *testing.T) {
 	d := []Decision{{Symbol: "BTCUSDT", Action: "open_long", Leverage: 8, PositionSizeUSD: 100, StopLoss: 99, TakeProfit: 0, Reasoning: "test"}}
 	if err := validateAIFreeDecisions(d, 5); err != nil {
