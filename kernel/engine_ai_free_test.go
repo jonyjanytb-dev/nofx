@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"errors"
 	"nofx/store"
 	"strings"
 	"testing"
@@ -56,6 +57,66 @@ func TestAIFreeStructuredOpenShortParses(t *testing.T) {
 	out, err := parseAIFreeDecisionResponse(response, ctx, 5)
 	if err != nil || len(out.Decisions) != 1 || out.Decisions[0].PositionSizeUSD != 50 {
 		t.Fatalf("valid structured OPEN must parse without guessing prose: decision=%+v err=%v", out, err)
+	}
+}
+
+func TestAIFreeMissingSizeGetsOneStructuredCorrection(t *testing.T) {
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "ZECUSDT"}}}
+	first := `<reasoning>打算做多 ZEC。</reasoning><decision>[{"symbol":"ZECUSDT","action":"open_long","leverage":5,"stop_loss":1485,"reasoning":"结构偏强"}]</decision>`
+	corrected := `<reasoning>重新检查后决定做多 ZEC。</reasoning><decision>[{"symbol":"ZECUSDT","action":"open_long","leverage":5,"position_size_usd":100,"stop_loss":1485,"take_profit":1540,"reasoning":"结构偏强"}]</decision>`
+	calls := 0
+	call := func(system, user string) (string, error) {
+		calls++
+		if !strings.Contains(system, "position_size_usd") || !strings.Contains(user, "market input") {
+			t.Fatal("correction must use the same market input and explicit decision schema")
+		}
+		return corrected, nil
+	}
+	decision, raw, prompt, err := parseAIFreeWithFormatRetry(first, ctx, 5, "original system", "market input", call)
+	if err != nil || calls != 1 || raw != corrected || !strings.Contains(prompt, "FORMAT CORRECTION") {
+		t.Fatalf("expected one successful format correction, calls=%d raw=%q prompt=%q err=%v", calls, raw, prompt, err)
+	}
+	if len(decision.Decisions) != 1 || decision.Decisions[0].PositionSizeUSD != 100 {
+		t.Fatalf("corrected order size was not parsed: %+v", decision.Decisions)
+	}
+}
+
+func TestAIFreeRepeatedMissingSizeFailsClosedAfterOneCorrection(t *testing.T) {
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "ZECUSDT"}}}
+	invalid := `<decision>[{"symbol":"ZECUSDT","action":"open_long","leverage":5,"stop_loss":1485,"reasoning":"结构偏强"}]</decision>`
+	calls := 0
+	decision, _, _, err := parseAIFreeWithFormatRetry(invalid, ctx, 5, "system", "market input", func(_, _ string) (string, error) {
+		calls++
+		return invalid, nil
+	})
+	if calls != 1 || err == nil || !strings.Contains(err.Error(), "position_size_usd") || decision == nil {
+		t.Fatalf("invalid correction must fail closed without another request, calls=%d decision=%+v err=%v", calls, decision, err)
+	}
+}
+
+func TestAIFreeValidWaitDoesNotRetry(t *testing.T) {
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "ZECUSDT"}}}
+	wait := `<decision>[{"symbol":"ZECUSDT","action":"wait","reasoning":"暂不交易"}]</decision>`
+	calls := 0
+	decision, _, _, err := parseAIFreeWithFormatRetry(wait, ctx, 5, "system", "market input", func(_, _ string) (string, error) {
+		calls++
+		return "", nil
+	})
+	if err != nil || calls != 0 || len(decision.Decisions) != 1 || decision.Decisions[0].Action != "wait" {
+		t.Fatalf("valid WAIT must not retry, calls=%d decision=%+v err=%v", calls, decision, err)
+	}
+}
+
+func TestAIFreeFormatCorrectionAPIErrorFailsClosed(t *testing.T) {
+	ctx := &Context{CandidateCoins: []CandidateCoin{{Symbol: "ZECUSDT"}}}
+	invalid := `<decision>[{"symbol":"ZECUSDT","action":"open_long","leverage":5,"stop_loss":1485,"reasoning":"结构偏强"}]</decision>`
+	calls := 0
+	_, _, _, err := parseAIFreeWithFormatRetry(invalid, ctx, 5, "system", "market input", func(_, _ string) (string, error) {
+		calls++
+		return "", errors.New("temporary model timeout")
+	})
+	if calls != 1 || err == nil || !strings.Contains(err.Error(), "format correction call failed") {
+		t.Fatalf("model error must fail closed without another retry, calls=%d err=%v", calls, err)
 	}
 }
 

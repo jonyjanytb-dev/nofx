@@ -116,7 +116,6 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// 4. Call AI API
 	aiCallStart := time.Now()
 	aiResponse, err := mcpClient.CallWithMessages(systemPrompt, userPrompt)
-	aiCallDuration := time.Since(aiCallStart)
 	if err != nil {
 		return nil, fmt.Errorf("AI API call failed: %w", err)
 	}
@@ -124,7 +123,9 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// 5. Parse AI response
 	var decision *FullDecision
 	if engine.usesAIFreeMode() {
-		decision, err = parseAIFreeDecisionResponse(aiResponse, ctx, riskConfig.MaxLeverage)
+		decision, aiResponse, systemPrompt, err = parseAIFreeWithFormatRetry(
+			aiResponse, ctx, riskConfig.MaxLeverage, systemPrompt, userPrompt, mcpClient.CallWithMessages,
+		)
 	} else {
 		decision, err = parseFullDecisionResponse(
 			aiResponse,
@@ -138,6 +139,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	}
 
 	if decision != nil {
+		aiCallDuration := time.Since(aiCallStart)
 		decision.Timestamp = time.Now()
 		decision.SystemPrompt = systemPrompt
 		decision.UserPrompt = userPrompt

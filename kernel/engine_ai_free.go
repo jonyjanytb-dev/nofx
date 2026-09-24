@@ -1,9 +1,12 @@
 package kernel
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
+
+var errAIFreeMissingPositionSize = errors.New("position_size_usd must be >0")
 
 func (e *StrategyEngine) usesAIFreeMode() bool {
 	return e != nil && e.config != nil && strings.EqualFold(strings.TrimSpace(e.config.DecisionMode), "ai_free")
@@ -116,7 +119,7 @@ func validateAIFreeDecisions(decisions []Decision, maxLeverage int) error {
 			d.Leverage = maxLeverage
 		}
 		if d.PositionSizeUSD <= 0 {
-			return fmt.Errorf("decision #%d position_size_usd must be >0", i+1)
+			return fmt.Errorf("decision #%d %w", i+1, errAIFreeMissingPositionSize)
 		}
 		if d.StopLoss <= 0 {
 			return fmt.Errorf("decision #%d stop_loss is mandatory", i+1)
@@ -142,6 +145,38 @@ func parseAIFreeDecisionResponse(aiResponse string, ctx *Context, maxLeverage in
 		return &FullDecision{CoTTrace: cotTrace, Decisions: decisions}, err
 	}
 	return &FullDecision{CoTTrace: cotTrace, Decisions: decisions}, nil
+}
+
+// parseAIFreeWithFormatRetry gives the model one chance to correct a missing
+// executable OPEN size. No decision is executed until the corrected response
+// has passed the same parser and validator; a second invalid response fails closed.
+func parseAIFreeWithFormatRetry(
+	aiResponse string,
+	ctx *Context,
+	maxLeverage int,
+	systemPrompt, userPrompt string,
+	call func(string, string) (string, error),
+) (*FullDecision, string, string, error) {
+	decision, err := parseAIFreeDecisionResponse(aiResponse, ctx, maxLeverage)
+	if !errors.Is(err, errAIFreeMissingPositionSize) {
+		return decision, aiResponse, systemPrompt, err
+	}
+	correctionPrompt := systemPrompt + `
+
+FORMAT CORRECTION: Your previous decision was not executable because an OPEN object omitted a positive position_size_usd.
+Re-evaluate the same supplied market and account data. Return the complete <reasoning> and <decision> response again.
+For each open_long/open_short include a positive numeric position_size_usd (USDT notional), leverage, stop_loss and reasoning in the JSON object.
+Derive size and stop from current data and hard risk boundaries; do not copy the illustrative example or infer an order from prose.
+If a valid opening size cannot be justified, output wait for that symbol. Do not force a trade.`
+	correctedResponse, callErr := call(correctionPrompt, userPrompt)
+	if callErr != nil {
+		return decision, aiResponse, systemPrompt, fmt.Errorf("AI-free format correction call failed: %w", callErr)
+	}
+	correctedDecision, parseErr := parseAIFreeDecisionResponse(correctedResponse, ctx, maxLeverage)
+	if parseErr != nil {
+		return correctedDecision, correctedResponse, correctionPrompt, fmt.Errorf("AI-free format correction failed: %w", parseErr)
+	}
+	return correctedDecision, correctedResponse, correctionPrompt, nil
 }
 
 func completeAIFreeDecisions(ctx *Context, in []Decision) ([]Decision, error) {
